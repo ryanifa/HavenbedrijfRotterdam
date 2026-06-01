@@ -1,0 +1,252 @@
+import { useEffect, useRef } from 'react'
+import maplibregl from 'maplibre-gl'
+import 'maplibre-gl/dist/maplibre-gl.css'
+
+// Donkere basemap (CARTO dark matter) zonder API-key.
+const STYLE = {
+  version: 8,
+  glyphs: 'https://fonts.openmaptiles.org/{fontstack}/{range}.pbf',
+  sources: {
+    carto: {
+      type: 'raster',
+      tiles: [
+        'https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png',
+        'https://b.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png',
+        'https://c.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png'
+      ],
+      tileSize: 256,
+      attribution: '© OpenStreetMap, © CARTO · demo Havenbedrijf Rotterdam'
+    }
+  },
+  layers: [
+    { id: 'bg', type: 'background', paint: { 'background-color': '#060b14' } },
+    { id: 'carto', type: 'raster', source: 'carto', paint: { 'raster-opacity': 0.92 } }
+  ]
+}
+
+const ROTTERDAM_BOUNDS = [
+  [3.78, 51.85],
+  [4.52, 52.02]
+]
+
+// Teken een pijl-icoon (wijst naar het noorden) als SDF-template.
+function makeArrowImage() {
+  const size = 64
+  const c = document.createElement('canvas')
+  c.width = c.height = size
+  const ctx = c.getContext('2d')
+  ctx.clearRect(0, 0, size, size)
+  ctx.fillStyle = '#fff'
+  ctx.beginPath()
+  ctx.moveTo(size / 2, 6) // punt boven
+  ctx.lineTo(size - 14, size - 10)
+  ctx.lineTo(size / 2, size - 22) // inkeping onder
+  ctx.lineTo(14, size - 10)
+  ctx.closePath()
+  ctx.fill()
+  return { width: size, height: size, data: ctx.getImageData(0, 0, size, size).data }
+}
+
+function shipsToGeoJSON(ships, filter) {
+  return {
+    type: 'FeatureCollection',
+    features: ships
+      .filter((s) => !filter || filter[s.type])
+      .map((s) => ({
+        type: 'Feature',
+        geometry: { type: 'Point', coordinates: s.position },
+        properties: {
+          mmsi: s.mmsi,
+          name: s.name,
+          color: s.color,
+          heading: s.heading || 0,
+          moving: s.speed > 0.5 ? 1 : 0,
+          size: Math.max(0.55, Math.min(1.4, s.length / 300))
+        }
+      }))
+  }
+}
+
+function trailsToGeoJSON(ships, filter) {
+  return {
+    type: 'FeatureCollection',
+    features: ships
+      .filter((s) => (!filter || filter[s.type]) && s.trail && s.trail.length > 1)
+      .map((s) => ({
+        type: 'Feature',
+        geometry: { type: 'LineString', coordinates: s.trail },
+        properties: { color: s.color }
+      }))
+  }
+}
+
+export default function MapView({ ships, selectedMmsi, onSelect, showHeatmap, showTrails, typeFilter }) {
+  const containerRef = useRef(null)
+  const mapRef = useRef(null)
+  const readyRef = useRef(false)
+  const popupRef = useRef(null)
+
+  // init kaart één keer
+  useEffect(() => {
+    const map = new maplibregl.Map({
+      container: containerRef.current,
+      style: STYLE,
+      bounds: ROTTERDAM_BOUNDS,
+      fitBoundsOptions: { padding: { top: 90, bottom: 60, left: 290, right: 370 } },
+      attributionControl: { compact: true },
+      maxZoom: 15,
+      minZoom: 9
+    })
+    mapRef.current = map
+    popupRef.current = new maplibregl.Popup({ closeButton: false, closeOnClick: false, offset: 16 })
+
+    map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-right')
+
+    map.on('load', () => {
+      map.addImage('ship-arrow', makeArrowImage(), { sdf: true })
+
+      map.addSource('trails', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } })
+      map.addSource('ships', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } })
+
+      // sporen (trails)
+      map.addLayer({
+        id: 'trails',
+        type: 'line',
+        source: 'trails',
+        layout: { 'line-cap': 'round', 'line-join': 'round' },
+        paint: {
+          'line-color': ['get', 'color'],
+          'line-width': 2,
+          'line-opacity': 0.35,
+          'line-blur': 1
+        }
+      })
+
+      // heatmap van scheepsdichtheid
+      map.addLayer({
+        id: 'heat',
+        type: 'heatmap',
+        source: 'ships',
+        layout: { visibility: 'none' },
+        paint: {
+          'heatmap-weight': 1,
+          'heatmap-intensity': 1.2,
+          'heatmap-radius': 34,
+          'heatmap-opacity': 0.75,
+          'heatmap-color': [
+            'interpolate', ['linear'], ['heatmap-density'],
+            0, 'rgba(0,0,0,0)',
+            0.2, 'rgba(34,211,238,0.35)',
+            0.45, 'rgba(56,189,248,0.6)',
+            0.7, 'rgba(251,191,36,0.8)',
+            1, 'rgba(248,113,113,0.95)'
+          ]
+        }
+      })
+
+      // selectie-halo achter het gekozen schip
+      map.addLayer({
+        id: 'ship-halo',
+        type: 'circle',
+        source: 'ships',
+        filter: ['==', ['get', 'mmsi'], -1],
+        paint: {
+          'circle-radius': 18,
+          'circle-color': 'rgba(56,189,248,0.18)',
+          'circle-stroke-color': '#38bdf8',
+          'circle-stroke-width': 2
+        }
+      })
+
+      // de schepen zelf (gekleurde pijl op koers)
+      map.addLayer({
+        id: 'ships',
+        type: 'symbol',
+        source: 'ships',
+        layout: {
+          'icon-image': 'ship-arrow',
+          'icon-rotate': ['get', 'heading'],
+          'icon-rotation-alignment': 'map',
+          'icon-allow-overlap': true,
+          'icon-size': ['*', ['get', 'size'], 0.42]
+        },
+        paint: {
+          'icon-color': ['get', 'color'],
+          'icon-halo-color': 'rgba(0,0,0,0.6)',
+          'icon-halo-width': 1.2,
+          'icon-opacity': ['case', ['==', ['get', 'moving'], 1], 1, 0.78]
+        }
+      })
+
+      readyRef.current = true
+      pushData()
+
+      // interactie
+      map.on('click', 'ships', (e) => {
+        if (e.features?.length) onSelect(e.features[0].properties.mmsi)
+      })
+      map.on('mouseenter', 'ships', (e) => {
+        map.getCanvas().style.cursor = 'pointer'
+        const f = e.features[0]
+        popupRef.current
+          .setLngLat(f.geometry.coordinates)
+          .setHTML(`<strong>${f.properties.name}</strong>`)
+          .addTo(map)
+      })
+      map.on('mouseleave', 'ships', () => {
+        map.getCanvas().style.cursor = ''
+        popupRef.current.remove()
+      })
+    })
+
+    function pushData() {
+      if (!readyRef.current) return
+      map.getSource('ships')?.setData(shipsToGeoJSON(shipsRef.current, filterRef.current))
+      map.getSource('trails')?.setData(trailsToGeoJSON(shipsRef.current, filterRef.current))
+    }
+    map._pushData = pushData
+
+    return () => map.remove()
+  }, [])
+
+  // houd laatste props bij in refs zodat de eenmalige init ze kan lezen
+  const shipsRef = useRef(ships)
+  const filterRef = useRef(typeFilter)
+  shipsRef.current = ships
+  filterRef.current = typeFilter
+
+  // data bijwerken bij elke tick / filterwijziging
+  useEffect(() => {
+    if (mapRef.current?._pushData) mapRef.current._pushData()
+  }, [ships, typeFilter])
+
+  // selectie-halo bijwerken
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map || !readyRef.current) return
+    if (map.getLayer('ship-halo')) {
+      map.setFilter('ship-halo', ['==', ['get', 'mmsi'], selectedMmsi ?? -1])
+    }
+    if (selectedMmsi != null) {
+      const s = ships.find((x) => x.mmsi === selectedMmsi)
+      if (s) map.easeTo({ center: s.position, zoom: Math.max(map.getZoom(), 12), duration: 800 })
+    }
+  }, [selectedMmsi])
+
+  // heatmap toggle
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map || !readyRef.current || !map.getLayer('heat')) return
+    map.setLayoutProperty('heat', 'visibility', showHeatmap ? 'visible' : 'none')
+    map.setLayoutProperty('ships', 'visibility', showHeatmap ? 'none' : 'visible')
+  }, [showHeatmap])
+
+  // trails toggle
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map || !readyRef.current || !map.getLayer('trails')) return
+    map.setLayoutProperty('trails', 'visibility', showTrails ? 'visible' : 'none')
+  }, [showTrails])
+
+  return <div id="map" ref={containerRef} />
+}
