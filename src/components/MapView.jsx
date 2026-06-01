@@ -2,25 +2,57 @@ import { useEffect, useRef } from 'react'
 import maplibregl from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
 
-// Donkere basemap (CARTO dark matter) zonder API-key.
+// Beschikbare basemaps (geen API-key nodig). Schakelbaar in de UI.
+export const BASEMAPS = {
+  color: {
+    label: '🌊 Kleur',
+    tiles: [
+      'https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png',
+      'https://b.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png',
+      'https://c.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png'
+    ],
+    attribution: '© OpenStreetMap, © CARTO',
+    paint: { 'raster-opacity': 1, 'raster-saturation': 0.25, 'raster-contrast': 0.05 },
+    bg: '#0a1626'
+  },
+  satellite: {
+    label: '🛰️ Satelliet',
+    tiles: [
+      'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
+    ],
+    attribution: '© Esri, Maxar, Earthstar Geographics',
+    paint: { 'raster-opacity': 1, 'raster-saturation': 0.3, 'raster-contrast': 0.1 },
+    bg: '#06141f'
+  },
+  dark: {
+    label: '🌙 Donker',
+    tiles: [
+      'https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png',
+      'https://b.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png',
+      'https://c.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png'
+    ],
+    attribution: '© OpenStreetMap, © CARTO',
+    paint: { 'raster-opacity': 0.92, 'raster-saturation': 0, 'raster-contrast': 0 },
+    bg: '#060b14'
+  }
+}
+
+const DEFAULT_BASEMAP = 'color'
+
 const STYLE = {
   version: 8,
   glyphs: 'https://fonts.openmaptiles.org/{fontstack}/{range}.pbf',
   sources: {
     carto: {
       type: 'raster',
-      tiles: [
-        'https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png',
-        'https://b.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png',
-        'https://c.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png'
-      ],
+      tiles: BASEMAPS[DEFAULT_BASEMAP].tiles,
       tileSize: 256,
-      attribution: '© OpenStreetMap, © CARTO · demo Havenbedrijf Rotterdam'
+      attribution: '© OpenStreetMap, © CARTO, © Esri · demo Havenbedrijf Rotterdam'
     }
   },
   layers: [
-    { id: 'bg', type: 'background', paint: { 'background-color': '#060b14' } },
-    { id: 'carto', type: 'raster', source: 'carto', paint: { 'raster-opacity': 0.92 } }
+    { id: 'bg', type: 'background', paint: { 'background-color': BASEMAPS[DEFAULT_BASEMAP].bg } },
+    { id: 'carto', type: 'raster', source: 'carto', paint: BASEMAPS[DEFAULT_BASEMAP].paint }
   ]
 }
 
@@ -80,7 +112,7 @@ function trailsToGeoJSON(ships, filter) {
   }
 }
 
-export default function MapView({ ships, selectedMmsi, onSelect, showHeatmap, showTrails, typeFilter }) {
+export default function MapView({ ships, selectedMmsi, onSelect, showHeatmap, showTrails, typeFilter, basemap = DEFAULT_BASEMAP }) {
   const containerRef = useRef(null)
   const mapRef = useRef(null)
   const readyRef = useRef(false)
@@ -257,6 +289,19 @@ export default function MapView({ ships, selectedMmsi, onSelect, showHeatmap, sh
     if (!map || !readyRef.current || !map.getLayer('trails')) return
     map.setLayoutProperty('trails', 'visibility', showTrails ? 'visible' : 'none')
   }, [showTrails])
+
+  // basemap wisselen (Kleur / Satelliet / Donker)
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map || !readyRef.current) return
+    const cfg = BASEMAPS[basemap] || BASEMAPS[DEFAULT_BASEMAP]
+    const src = map.getSource('carto')
+    if (src && src.setTiles) src.setTiles(cfg.tiles)
+    map.setPaintProperty('bg', 'background-color', cfg.bg)
+    for (const [prop, val] of Object.entries(cfg.paint)) {
+      map.setPaintProperty('carto', prop, val)
+    }
+  }, [basemap])
 
   return <div id="map" ref={containerRef} />
 }

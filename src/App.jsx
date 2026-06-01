@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import MapView from './components/MapView.jsx'
+import MapView, { BASEMAPS } from './components/MapView.jsx'
 import Sidebar from './components/Sidebar.jsx'
 import StatsPanel from './components/StatsPanel.jsx'
 import KeyGate from './components/KeyGate.jsx'
@@ -26,21 +26,27 @@ export default function App() {
   const [showTrails, setShowTrails] = useState(true)
   const [clock, setClock] = useState(new Date())
   const [typeFilter, setTypeFilter] = useState(null)
+  const [basemap, setBasemap] = useState('color')
 
   // 'gate' = vraag om key, 'live' = echte AIS, 'demo' = simulatie
   const [aisKey, setAisKey] = useState(INITIAL_KEY)
   const [mode, setMode] = useState(INITIAL_KEY ? 'live' : 'gate')
   const [status, setStatus] = useState(INITIAL_KEY ? 'connecting' : 'demo')
+  const [statusDetail, setStatusDetail] = useState('')
   const sourceRef = useRef(null)
 
   // start/stop de juiste databron op basis van de modus
   useEffect(() => {
     if (mode === 'gate') return
     setShips([])
+    setStatusDetail('')
     let source
     if (mode === 'live' && aisKey) {
       source = new AisStreamSource({ apiKey: aisKey })
-      source.setStatusHandler(setStatus)
+      source.setStatusHandler((s, detail) => {
+        setStatus(s)
+        setStatusDetail(detail || '')
+      })
     } else {
       source = new MockSource({ count: 72, tickMs: 1000, timeScale: 26 })
       setStatus('demo')
@@ -86,7 +92,21 @@ export default function App() {
   }
 
   const isLive = mode === 'live'
-  const statusClass = status === 'live' ? 'good' : status === 'error' ? 'bad' : 'warn'
+  const statusClass = status === 'live' ? 'good' : (status === 'error' || status === 'reconnecting') ? 'bad' : 'warn'
+
+  // eerlijke melding onderin op basis van de echte verbindingsstatus
+  function hintMessage() {
+    if (!isLive) return <>Klik op een schip voor live details <span className="kbd">ESC</span> om te sluiten</>
+    if (status === 'error' || status === 'reconnecting') {
+      return <>⚠️ Geen AIS-verbinding{statusDetail ? ` — ${statusDetail}` : ''}. Controleer je API-key (knop ⚙ Bron) of netwerk.</>
+    }
+    if (ships.length === 0) {
+      return status === 'live'
+        ? 'Verbonden met AIS — wachten op de eerste scheepsdata…'
+        : 'Verbinden met AIS…'
+    }
+    return <>Klik op een schip voor live details <span className="kbd">ESC</span> om te sluiten</>
+  }
 
   return (
     <div className="app">
@@ -97,6 +117,7 @@ export default function App() {
         showHeatmap={showHeatmap}
         showTrails={showTrails}
         typeFilter={typeFilter}
+        basemap={basemap}
       />
 
       <header className="topbar">
@@ -119,6 +140,16 @@ export default function App() {
       <StatsPanel ships={ships} typeFilter={typeFilter} onToggleType={toggleType} />
 
       <div className="controls panel">
+        {Object.entries(BASEMAPS).map(([key, cfg]) => (
+          <button
+            key={key}
+            className={`toggle ${basemap === key ? 'on' : ''}`}
+            onClick={() => setBasemap(key)}
+          >
+            {cfg.label}
+          </button>
+        ))}
+        <span className="ctrl-divider" />
         <button className={`toggle ${showTrails ? 'on' : ''}`} onClick={() => setShowTrails((v) => !v)}>
           ✦ Sporen
         </button>
@@ -132,13 +163,7 @@ export default function App() {
 
       <Sidebar ship={selectedShip} onClose={() => setSelectedMmsi(null)} />
 
-      {!selectedShip && (
-        <div className="hint panel">
-          {isLive && ships.length === 0
-            ? 'Verbinden met AIS… eerste schepen verschijnen zo'
-            : <>Klik op een schip voor live details <span className="kbd">ESC</span> om te sluiten</>}
-        </div>
-      )}
+      {!selectedShip && <div className="hint panel">{hintMessage()}</div>}
     </div>
   )
 }

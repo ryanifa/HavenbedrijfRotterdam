@@ -249,8 +249,18 @@ body,
   left: 18px;
   z-index: 15;
   display: flex;
+  flex-wrap: wrap;
+  align-items: center;
   gap: 8px;
   padding: 8px;
+  max-width: calc(100vw - 400px);
+}
+
+.ctrl-divider {
+  width: 1px;
+  align-self: stretch;
+  background: var(--border);
+  margin: 2px 2px;
 }
 
 .toggle {
