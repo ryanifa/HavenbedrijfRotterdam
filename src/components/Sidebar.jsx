@@ -1,6 +1,7 @@
 // Detail-paneel dat openschuift wanneer je een schip aanklikt.
 
 function fmtEta(iso) {
+  if (!iso) return '—'
   try {
     const d = new Date(iso)
     return d.toLocaleString('nl-NL', {
@@ -10,6 +11,9 @@ function fmtEta(iso) {
     return '—'
   }
 }
+
+// Toon een waarde of een streepje als hij ontbreekt (live AIS is niet altijd compleet).
+const or = (v, suffix = '') => (v == null || v === '' ? '—' : `${v}${suffix}`)
 
 export default function Sidebar({ ship, onClose }) {
   return (
@@ -44,14 +48,15 @@ export default function Sidebar({ ship, onClose }) {
                 <span className={`status-badge status-${ship.status.replace(/\s/g, '.')}`}>{ship.status}</span>
               </span>
             </div>
-            <div className="kv"><span className="k">Bestemming</span><span className="v">{ship.destination}</span></div>
+            <div className="kv"><span className="k">Bestemming</span><span className="v">{or(ship.destination)}</span></div>
             <div className="kv"><span className="k">ETA</span><span className="v">{fmtEta(ship.eta)}</span></div>
             {ship.berthName && <div className="kv"><span className="k">Ligplaats</span><span className="v">{ship.berthName}</span></div>}
-            <div className="kv"><span className="k">Afmetingen</span><span className="v">{ship.length} × {ship.width} m</span></div>
-            <div className="kv"><span className="k">Diepgang</span><span className="v">{ship.draught} m</span></div>
-            <div className="kv"><span className="k">Brutotonnage</span><span className="v">{ship.grossTonnage.toLocaleString('nl-NL')} GT</span></div>
-            <div className="kv"><span className="k">Bouwjaar</span><span className="v">{ship.yearBuilt}</span></div>
-            <div className="kv"><span className="k">Positie</span><span className="v">{ship.position[1].toFixed(4)}, {ship.position[0].toFixed(4)}</span></div>
+            {ship.imo && <div className="kv"><span className="k">IMO</span><span className="v">{ship.imo}</span></div>}
+            <div className="kv"><span className="k">Afmetingen</span><span className="v">{ship.length && ship.width ? `${ship.length} × ${ship.width} m` : '—'}</span></div>
+            <div className="kv"><span className="k">Diepgang</span><span className="v">{or(ship.draught, ' m')}</span></div>
+            <div className="kv"><span className="k">Brutotonnage</span><span className="v">{ship.grossTonnage != null ? `${ship.grossTonnage.toLocaleString('nl-NL')} GT` : '—'}</span></div>
+            <div className="kv"><span className="k">Bouwjaar</span><span className="v">{or(ship.yearBuilt)}</span></div>
+            <div className="kv"><span className="k">Positie</span><span className="v">{ship.position ? `${ship.position[1].toFixed(4)}, ${ship.position[0].toFixed(4)}` : '—'}</span></div>
           </div>
         </>
       )}

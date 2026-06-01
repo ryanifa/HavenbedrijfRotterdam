@@ -30,6 +30,9 @@ jobs:
 
       - run: npm ci
       - run: npm run build
+        env:
+          # AISStream API-key uit repo-secret -> beschikbaar als import.meta.env.VITE_AIS_KEY
+          VITE_AIS_KEY: ${{ secrets.AIS_API_KEY }}
 
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3

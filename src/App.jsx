@@ -2,13 +2,21 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import MapView from './components/MapView.jsx'
 import Sidebar from './components/Sidebar.jsx'
 import StatsPanel from './components/StatsPanel.jsx'
-import { MockSource } from './data/source.js'
+import KeyGate from './components/KeyGate.jsx'
+import { MockSource, AisStreamSource } from './data/source.js'
 import { SHIP_TYPES } from './data/fleet.js'
 
-// Wil je later live AIS-data? Vervang MockSource hieronder door AisStreamSource
-// (zie src/data/source.js) en geef je aisstream.io API-key mee.
-function createSource() {
-  return new MockSource({ count: 72, tickMs: 1000, timeScale: 26 })
+// API-key uit build (GitHub Secret -> VITE_AIS_KEY) of uit localStorage.
+const ENV_KEY = import.meta.env.VITE_AIS_KEY || ''
+const STORED_KEY = typeof localStorage !== 'undefined' ? localStorage.getItem('ais_key') || '' : ''
+const INITIAL_KEY = STORED_KEY || ENV_KEY
+
+const STATUS_LABEL = {
+  connecting: 'VERBINDEN…',
+  live: 'LIVE',
+  reconnecting: 'HERVERBINDEN…',
+  error: 'FOUT',
+  demo: 'DEMO'
 }
 
 export default function App() {
@@ -17,17 +25,30 @@ export default function App() {
   const [showHeatmap, setShowHeatmap] = useState(false)
   const [showTrails, setShowTrails] = useState(true)
   const [clock, setClock] = useState(new Date())
-  // typeFilter: object met per type true/false; null = alles aan
   const [typeFilter, setTypeFilter] = useState(null)
+
+  // 'gate' = vraag om key, 'live' = echte AIS, 'demo' = simulatie
+  const [aisKey, setAisKey] = useState(INITIAL_KEY)
+  const [mode, setMode] = useState(INITIAL_KEY ? 'live' : 'gate')
+  const [status, setStatus] = useState(INITIAL_KEY ? 'connecting' : 'demo')
   const sourceRef = useRef(null)
 
+  // start/stop de juiste databron op basis van de modus
   useEffect(() => {
-    const source = createSource()
+    if (mode === 'gate') return
+    setShips([])
+    let source
+    if (mode === 'live' && aisKey) {
+      source = new AisStreamSource({ apiKey: aisKey })
+      source.setStatusHandler(setStatus)
+    } else {
+      source = new MockSource({ count: 72, tickMs: 1000, timeScale: 26 })
+      setStatus('demo')
+    }
     sourceRef.current = source
-    // nieuwe array-referentie forceren zodat React her-rendert
     source.start((list) => setShips([...list]))
     return () => source.stop()
-  }, [])
+  }, [mode, aisKey])
 
   useEffect(() => {
     const t = setInterval(() => setClock(new Date()), 1000)
@@ -43,18 +64,29 @@ export default function App() {
     setTypeFilter((prev) => {
       const base = prev || Object.fromEntries(Object.keys(SHIP_TYPES).map((k) => [k, true]))
       const next = { ...base, [key]: !base[key] }
-      // als alles weer aan staat -> terug naar null (geen filter)
       if (Object.values(next).every(Boolean)) return null
       return next
     })
   }
 
-  // ESC sluit het detailpaneel
+  function connectLive(key) {
+    localStorage.setItem('ais_key', key)
+    setAisKey(key)
+    setMode('live')
+  }
+
   useEffect(() => {
     const onKey = (e) => e.key === 'Escape' && setSelectedMmsi(null)
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [])
+
+  if (mode === 'gate') {
+    return <KeyGate onConnect={connectLive} onDemo={() => { setStatus('demo'); setMode('demo') }} />
+  }
+
+  const isLive = mode === 'live'
+  const statusClass = status === 'live' ? 'good' : status === 'error' ? 'bad' : 'warn'
 
   return (
     <div className="app">
@@ -72,15 +104,15 @@ export default function App() {
           <span className="logo">⚓</span>
           <div>
             <h1>PORT OF ROTTERDAM</h1>
-            <div className="sub">Mission Control · Live Vessel Traffic</div>
+            <div className="sub">Mission Control · {isLive ? 'Live AIS' : 'Demo-simulatie'}</div>
           </div>
         </div>
         <div className="clock">
           {clock.toLocaleTimeString('nl-NL')} ·{' '}
           {clock.toLocaleDateString('nl-NL', { weekday: 'short', day: '2-digit', month: 'short' })}
         </div>
-        <div className="live-pill">
-          <span className="live-dot" /> LIVE
+        <div className={`live-pill ${statusClass}`}>
+          <span className="live-dot" /> {STATUS_LABEL[status] || 'LIVE'}
         </div>
       </header>
 
@@ -93,13 +125,18 @@ export default function App() {
         <button className={`toggle ${showHeatmap ? 'on' : ''}`} onClick={() => setShowHeatmap((v) => !v)}>
           ◍ Heatmap
         </button>
+        <button className="toggle" onClick={() => setMode('gate')}>
+          ⚙ Bron
+        </button>
       </div>
 
       <Sidebar ship={selectedShip} onClose={() => setSelectedMmsi(null)} />
 
       {!selectedShip && (
         <div className="hint panel">
-          Klik op een schip voor live details <span className="kbd">ESC</span> om te sluiten
+          {isLive && ships.length === 0
+            ? 'Verbinden met AIS… eerste schepen verschijnen zo'
+            : <>Klik op een schip voor live details <span className="kbd">ESC</span> om te sluiten</>}
         </div>
       )}
     </div>
