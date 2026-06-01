@@ -61,22 +61,37 @@ const ROTTERDAM_BOUNDS = [
   [4.52, 52.02]
 ]
 
-// Teken een pijl-icoon (wijst naar het noorden) als SDF-template.
-function makeArrowImage() {
-  const size = 64
+// Teken een scheepssilhouet van bovenaf (boeg wijst naar het noorden) als
+// SDF-template, zodat het via icon-color per type ingekleurd kan worden.
+function makeVesselImage() {
+  const s = 128
   const c = document.createElement('canvas')
-  c.width = c.height = size
+  c.width = c.height = s
   const ctx = c.getContext('2d')
-  ctx.clearRect(0, 0, size, size)
+  ctx.clearRect(0, 0, s, s)
   ctx.fillStyle = '#fff'
+  const cx = s / 2
+  // langwerpige romp: spitse boeg boven, ronde achtersteven onder
   ctx.beginPath()
-  ctx.moveTo(size / 2, 6) // punt boven
-  ctx.lineTo(size - 14, size - 10)
-  ctx.lineTo(size / 2, size - 22) // inkeping onder
-  ctx.lineTo(14, size - 10)
+  ctx.moveTo(cx, 8) // boegpunt
+  ctx.quadraticCurveTo(cx + 30, 32, cx + 28, 62) // stuurboord boeg
+  ctx.lineTo(cx + 28, 94) // stuurboord zijde
+  ctx.quadraticCurveTo(cx + 26, 116, cx, 118) // stuurboord achtersteven -> midden
+  ctx.quadraticCurveTo(cx - 26, 116, cx - 28, 94) // bakboord achtersteven
+  ctx.lineTo(cx - 28, 62) // bakboord zijde
+  ctx.quadraticCurveTo(cx - 30, 32, cx, 8) // bakboord boeg -> boeg
   ctx.closePath()
   ctx.fill()
-  return { width: size, height: size, data: ctx.getImageData(0, 0, size, size).data }
+  // subtiele inkeping bij de achtersteven voor een vleugje detail
+  ctx.globalCompositeOperation = 'destination-out'
+  ctx.beginPath()
+  ctx.moveTo(cx, 104)
+  ctx.lineTo(cx + 10, 116)
+  ctx.lineTo(cx - 10, 116)
+  ctx.closePath()
+  ctx.fill()
+  ctx.globalCompositeOperation = 'source-over'
+  return { width: s, height: s, data: ctx.getImageData(0, 0, s, s).data }
 }
 
 function shipsToGeoJSON(ships, filter) {
@@ -141,7 +156,7 @@ export default function MapView({ ships, selectedMmsi, onSelect, showHeatmap, sh
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-right')
 
     map.on('load', () => {
-      map.addImage('ship-arrow', makeArrowImage(), { sdf: true })
+      map.addImage('vessel', makeVesselImage(), { sdf: true })
 
       map.addSource('trails', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } })
       map.addSource('ships', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } })
@@ -202,17 +217,17 @@ export default function MapView({ ships, selectedMmsi, onSelect, showHeatmap, sh
         type: 'symbol',
         source: 'ships',
         layout: {
-          'icon-image': 'ship-arrow',
+          'icon-image': 'vessel',
           'icon-rotate': ['get', 'heading'],
           'icon-rotation-alignment': 'map',
           'icon-allow-overlap': true,
-          'icon-size': ['*', ['get', 'size'], 0.42]
+          'icon-size': ['*', ['get', 'size'], 0.24]
         },
         paint: {
           'icon-color': ['get', 'color'],
-          'icon-halo-color': 'rgba(0,0,0,0.6)',
-          'icon-halo-width': 1.2,
-          'icon-opacity': ['case', ['==', ['get', 'moving'], 1], 1, 0.78]
+          'icon-halo-color': 'rgba(3, 8, 16, 0.85)',
+          'icon-halo-width': 1.8,
+          'icon-opacity': ['case', ['==', ['get', 'moving'], 1], 1, 0.82]
         }
       })
 
