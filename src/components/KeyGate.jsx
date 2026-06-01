@@ -47,6 +47,8 @@ export default function KeyGate({ onConnect, onDemo }) {
             of bekijk eerst de demo-simulatie →
           </button>
         )}
+
+        <div className="gate-version">build {__APP_VERSION__}</div>
       </form>
     </div>
   )

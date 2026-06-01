@@ -129,6 +129,18 @@ body,
   font-variant-numeric: tabular-nums;
   font-size: 13px;
   color: var(--text-dim);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  line-height: 1.3;
+}
+
+.build-tag {
+  font-size: 10px;
+  letter-spacing: 0.5px;
+  color: var(--text-dim);
+  opacity: 0.65;
+  font-variant-numeric: tabular-nums;
 }
 
 /* ---------- Glass panels ---------- */
@@ -530,3 +542,11 @@ body,
   text-decoration: underline;
 }
 .gate-link:hover { color: var(--text); }
+
+.gate-version {
+  margin-top: 18px;
+  font-size: 10.5px;
+  color: var(--text-dim);
+  opacity: 0.55;
+  font-variant-numeric: tabular-nums;
+}

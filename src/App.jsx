@@ -131,6 +131,7 @@ export default function App() {
         <div className="clock">
           {clock.toLocaleTimeString('nl-NL')} ·{' '}
           {clock.toLocaleDateString('nl-NL', { weekday: 'short', day: '2-digit', month: 'short' })}
+          <span className="build-tag" title="Build-versie">build {__APP_VERSION__}</span>
         </div>
         <div className={`live-pill ${statusClass}`}>
           <span className="live-dot" /> {STATUS_LABEL[status] || 'LIVE'}
