@@ -88,16 +88,22 @@ export default function MapView({ ships, selectedMmsi, onSelect, showHeatmap, sh
 
   // init kaart één keer
   useEffect(() => {
+    // bescherm tegen dubbele initialisatie (bv. hot-reload)
+    if (mapRef.current) return
+
     const map = new maplibregl.Map({
       container: containerRef.current,
       style: STYLE,
       bounds: ROTTERDAM_BOUNDS,
       fitBoundsOptions: { padding: { top: 90, bottom: 60, left: 290, right: 370 } },
-      attributionControl: { compact: true },
+      attributionControl: false,
       maxZoom: 15,
       minZoom: 9
     })
     mapRef.current = map
+    map.addControl(new maplibregl.AttributionControl({ compact: true }))
+
+    map.on('error', (e) => console.error('MapLibre error:', e?.error?.message || e))
     popupRef.current = new maplibregl.Popup({ closeButton: false, closeOnClick: false, offset: 16 })
 
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-right')
@@ -206,7 +212,11 @@ export default function MapView({ ships, selectedMmsi, onSelect, showHeatmap, sh
     }
     map._pushData = pushData
 
-    return () => map.remove()
+    return () => {
+      map.remove()
+      mapRef.current = null
+      readyRef.current = false
+    }
   }, [])
 
   // houd laatste props bij in refs zodat de eenmalige init ze kan lezen
