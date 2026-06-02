@@ -138,11 +138,16 @@ export default function MapView({ ships, selectedMmsi, onSelect, showHeatmap, sh
     // bescherm tegen dubbele initialisatie (bv. hot-reload)
     if (mapRef.current) return
 
+    const mobile = window.innerWidth < 820
     const map = new maplibregl.Map({
       container: containerRef.current,
       style: STYLE,
       bounds: ROTTERDAM_BOUNDS,
-      fitBoundsOptions: { padding: { top: 90, bottom: 60, left: 290, right: 370 } },
+      fitBoundsOptions: {
+        padding: mobile
+          ? { top: 70, bottom: 90, left: 16, right: 16 }
+          : { top: 90, bottom: 60, left: 290, right: 370 }
+      },
       attributionControl: false,
       maxZoom: 15,
       minZoom: 9
@@ -286,7 +291,11 @@ export default function MapView({ ships, selectedMmsi, onSelect, showHeatmap, sh
     }
     if (selectedMmsi != null) {
       const s = ships.find((x) => x.mmsi === selectedMmsi)
-      if (s) map.easeTo({ center: s.position, zoom: Math.max(map.getZoom(), 12), duration: 800 })
+      if (s) {
+        // op mobiel het schip omhoog pannen zodat het boven de bottom-sheet blijft
+        const offset = window.innerWidth < 820 ? [0, -window.innerHeight * 0.2] : [0, 0]
+        map.easeTo({ center: s.position, zoom: Math.max(map.getZoom(), 12), offset, duration: 800 })
+      }
     }
   }, [selectedMmsi])
 
