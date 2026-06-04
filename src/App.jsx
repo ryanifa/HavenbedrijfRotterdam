@@ -94,18 +94,27 @@ export default function App() {
   const isLive = mode === 'live'
   const statusClass = status === 'live' ? 'good' : (status === 'error' || status === 'reconnecting') ? 'bad' : 'warn'
 
-  // eerlijke melding onderin op basis van de echte verbindingsstatus
-  function hintMessage() {
-    if (!isLive) return <>Klik op een schip voor live details <span className="kbd">ESC</span> om te sluiten</>
+  // eerlijke melding onderin op basis van de echte verbindingsstatus.
+  // kind 'instruction' wordt op mobiel verborgen (app is daar intuïtief genoeg).
+  function hintInfo() {
+    const instruction = {
+      kind: 'instruction',
+      node: <>Klik op een schip voor live details <span className="kbd">ESC</span> om te sluiten</>
+    }
+    if (!isLive) return instruction
     if (status === 'error' || status === 'reconnecting') {
-      return <>⚠️ Geen AIS-verbinding{statusDetail ? ` — ${statusDetail}` : ''}. Controleer je API-key (knop ⚙ Bron) of netwerk.</>
+      return {
+        kind: 'status',
+        node: <>⚠️ Geen AIS-verbinding{statusDetail ? ` — ${statusDetail}` : ''}. Controleer je API-key (knop ⚙ Bron) of netwerk.</>
+      }
     }
     if (ships.length === 0) {
-      return status === 'live'
-        ? 'Verbonden met AIS — wachten op de eerste scheepsdata…'
-        : 'Verbinden met AIS…'
+      return {
+        kind: 'status',
+        node: status === 'live' ? 'Verbonden met AIS — wachten op de eerste scheepsdata…' : 'Verbinden met AIS…'
+      }
     }
-    return <>Klik op een schip voor live details <span className="kbd">ESC</span> om te sluiten</>
+    return instruction
   }
 
   return (
@@ -164,7 +173,10 @@ export default function App() {
 
       <Sidebar ship={selectedShip} onClose={() => setSelectedMmsi(null)} />
 
-      {!selectedShip && <div className="hint panel">{hintMessage()}</div>}
+      {!selectedShip && (() => {
+        const h = hintInfo()
+        return <div className={`hint panel ${h.kind === 'instruction' ? 'is-instruction' : ''}`}>{h.node}</div>
+      })()}
     </div>
   )
 }
