@@ -2,7 +2,7 @@ import { useState } from 'react'
 
 // Toegangsscherm dat om een AISStream API-key vraagt wanneer er nog geen is.
 // De key wordt in localStorage bewaard (komt niet in de repo).
-export default function KeyGate({ onConnect, onDemo }) {
+export default function KeyGate({ onConnect, onDemo, onCancel }) {
   const [value, setValue] = useState('')
 
   function submit(e) {
@@ -14,6 +14,9 @@ export default function KeyGate({ onConnect, onDemo }) {
   return (
     <div className="gate">
       <form className="gate-card panel" onSubmit={submit}>
+        {onCancel && (
+          <button type="button" className="close-btn gate-close" onClick={onCancel} aria-label="Sluiten">×</button>
+        )}
         <div className="gate-logo">⚓</div>
         <h1>Port of Rotterdam · Live Vessel Traffic</h1>
         <p className="gate-sub">

@@ -601,6 +601,9 @@ body,
   /* instructie-balk weglaten op mobiel; statusmeldingen blijven */
   .hint.is-instruction { display: none; }
 
+  /* Bron-knop verbergen op mobiel (key is ingebakken via build) */
+  .source-btn { display: none; }
+
   /* detailpaneel als bottom-sheet */
   .sidebar {
     top: auto;
@@ -632,3 +635,5 @@ body,
   .gate-sub { font-size: 12.5px; }
   .stat-grid { gap: 13px; }
 }
+
+.gate-close { position: absolute; top: 14px; right: 14px; }

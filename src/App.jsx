@@ -88,7 +88,13 @@ export default function App() {
   }, [])
 
   if (mode === 'gate') {
-    return <KeyGate onConnect={connectLive} onDemo={() => { setStatus('demo'); setMode('demo') }} />
+    return (
+      <KeyGate
+        onConnect={connectLive}
+        onDemo={() => { setStatus('demo'); setMode('demo') }}
+        onCancel={aisKey ? () => setMode('live') : undefined}
+      />
+    )
   }
 
   const isLive = mode === 'live'
@@ -166,7 +172,7 @@ export default function App() {
         <button className={`toggle ${showHeatmap ? 'on' : ''}`} onClick={() => setShowHeatmap((v) => !v)}>
           ◍ Heatmap
         </button>
-        <button className="toggle" onClick={() => setMode('gate')}>
+        <button className="toggle source-btn" onClick={() => setMode('gate')}>
           ⚙ Bron
         </button>
       </div>
